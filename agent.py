@@ -296,7 +296,9 @@ class FileSystemAgent:
                 )
 
         if not search_tools and self.config.enable_web_search:
-            logger.warning('⚠️ Веб-поиск включен, но инструменты поиска не загружены')
+            logger.warning(
+                '⚠️ Веб-поиск включен, но инструменты поиска не загружены'
+                )
 
     def _get_system_prompt(self) -> str:
         """Формирует системный промпт для агента,
@@ -444,7 +446,7 @@ async def main():
                 '/Users/alexeyfilichkin/MainDev/web_search_agent'
                 ),
             model_provider=ModelProvider(
-                os.getenv('MODEL_PROVIDER', 'ollama')
+                os.getenv('MODEL_PROVIDER', 'openai')
                 ),
             enable_web_search=True  # Включаем веб-поиск
         )

@@ -184,4 +184,5 @@ mcp_data/
 # Local development
 .local/
 local_config.py
-config.local.py 
+config.local.py
+*.json 
