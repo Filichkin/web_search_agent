@@ -107,7 +107,7 @@ class AgentConfig:
                 )
 
         # Проверка API ключа если нужен
-        api_key_env = config.get("api_key_env")
+        api_key_env = config.get('api_key_env')
         if api_key_env and not os.getenv(api_key_env):
             raise ValueError(f"Отсутствует переменная окружения: {api_key_env}")
         
