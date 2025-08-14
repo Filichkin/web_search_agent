@@ -446,7 +446,7 @@ async def main():
                 '/Users/alexeyfilichkin/MainDev/web_search_agent'
                 ),
             model_provider=ModelProvider(
-                os.getenv('MODEL_PROVIDER', 'ollama')
+                os.getenv('MODEL_PROVIDER', 'openai')
                 ),
             enable_web_search=True  # Включаем веб-поиск
         )
