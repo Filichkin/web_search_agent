@@ -73,7 +73,7 @@ class AgentConfig:
     # Упрощенные настройки моделей
     model_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
         "ollama": {
-            "model_name": "qwen2.5:32b",
+            "model_name": "qwen2.5:0.5b",
             "base_url": "http://localhost:11434",
             "temperature": 0.0
         },
@@ -446,7 +446,7 @@ async def main():
                 '/Users/alexeyfilichkin/MainDev/web_search_agent'
                 ),
             model_provider=ModelProvider(
-                os.getenv('MODEL_PROVIDER', 'openai')
+                os.getenv('MODEL_PROVIDER', 'ollama')
                 ),
             enable_web_search=True  # Включаем веб-поиск
         )
