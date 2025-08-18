@@ -176,6 +176,7 @@ pids
 *.temp
 .tmp/
 temp/
+draft/
 
 # MCP specific
 .mcp/
@@ -186,3 +187,4 @@ mcp_data/
 local_config.py
 config.local.py
 *.json 
+commands.txt
