@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 from enum import Enum
 from functools import wraps
@@ -11,59 +10,12 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain_deepseek import ChatDeepSeek
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
-
-# ===== НАСТРОЙКА ЛОГИРОВАНИЯ =====
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('ai_agent.log', encoding='utf-8')
-    ]
-)
-logger = logging.getLogger(__name__)
-
-
-class SearchLoggingCallback(BaseCallbackHandler):
-    """
-    Логирует входные данные инструментов поиска (например, brave-search).
-    """
-    def on_tool_start(self, serialized, input_str, **kwargs):
-        # serialized содержит метаданные инструмента (name/description и пр.)
-        tool_name = (serialized or {}).get('name', '').lower()
-
-        # input_str в LC 0.2 бывает и dict, и str — поддержим оба варианта
-        query_text = None
-        if isinstance(input_str, dict):
-            # У server-brave-search поле обычно называется 'query'
-            query_text = input_str.get('query')
-            if query_text is None:
-                # иногда модель может слать просто "input"
-                query_text = input_str.get('input')
-        else:
-            query_text = str(input_str)
-
-        # Логируем всё, что связано с поиском
-        if any(option in tool_name for option in ['search', 'brave', 'web']):
-            logger.info(
-                '🔎 [ПОИСК] Инструмент: %s | Запрос: %r', tool_name, query_text
-                )
-
-    def on_tool_end(self, output, **kwargs):
-        # Можно кратко отметить завершение и размер/тип ответа
-        try:
-            size = len(output) if hasattr(output, '__len__') else None
-        except Exception:
-            size = None
-        logger.info(
-            '🔎 [ПОИСК] Завершено. Тип ответа: '
-            '%s | Длина: %s', type(output).__name__, size
-            )
+from pipeline.logging import logger
+from pipeline.utils import SearchLoggingCallback
 
 
 # ===== ЕНУМЫ И КОНСТАНТЫ =====
