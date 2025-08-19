@@ -14,8 +14,8 @@ from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
-from pipeline.logging import logger
-from pipeline.utils import SearchLoggingCallback, wrap_search_tool
+from pipeline.utils.logging import logger
+from pipeline.utils.tools import SearchLoggingCallback, wrap_search_tool
 
 
 # ===== ЕНУМЫ И КОНСТАНТЫ =====
@@ -59,6 +59,7 @@ class AgentConfig:
     model_provider: ModelProvider = ModelProvider.OLLAMA
     use_memory: bool = True
     enable_web_search: bool = True
+    search_count: int = 10
 
     # Упрощенные настройки моделей
     model_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
@@ -317,6 +318,8 @@ class FileSystemAgent:
             'передавай в поле `query` '
             'ПОЛНЫЙ исходный текст сообщения пользователя '
             'без перефразирования и сокращений.'
+            'После первого успешного веб-поиска переходи к ответу; '
+            'не повторяй один и тот же поиск более одного раза.'
             )
 
         if self.config.enable_web_search:
@@ -366,7 +369,8 @@ class FileSystemAgent:
             config = {
                 'configurable': {'thread_id': thread_id},
                 'raw_user_input': user_input,
-                'callbacks': [SearchLoggingCallback()]
+                'callbacks': [SearchLoggingCallback()],
+                'recursion_limit': 6
                 }
             message_input = {'messages': [HumanMessage(content=user_input)]}
 
