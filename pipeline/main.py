@@ -130,11 +130,15 @@ class AgentConfig:
                 "command": "npx",
                 "args": [
                     "-y",
-                    "@modelcontextprotocol/server-brave-search@latest"
+                    # "@modelcontextprotocol/server-brave-search@latest"
+                    "@brave/brave-search-mcp-server",
+                    "--transport",
+                    "stdio"
                     ],
                 "transport": "stdio",
                 "env": {
-                    "BRAVE_API_KEY": os.getenv("BRAVE_API_KEY")
+                    "BRAVE_API_KEY": os.getenv("BRAVE_API_KEY"),
+                    "BRAVE_MCP_LOG_LEVEL": "debug"
                 }
             }
             logger.info('Включен Brave Search для веб-поиска')
@@ -454,7 +458,7 @@ class InteractiveChat:
                 )
             print(f'\n{response}')
 
-        print('\n👋 До свидания!')
+        print('\nРабота агента успешно завершена!')
 
 
 # ===== ГЛАВНАЯ ФУНКЦИЯ =====
