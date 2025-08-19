@@ -15,7 +15,7 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
 from pipeline.logging import logger
-from pipeline.utils import SearchLoggingCallback
+from pipeline.utils import SearchLoggingCallback, wrap_search_tool
 
 
 # ===== ЕНУМЫ И КОНСТАНТЫ =====
@@ -252,27 +252,38 @@ class FileSystemAgent:
     @retry_on_failure()
     async def _init_mcp_client(self):
         """Инициализация MCP клиента"""
+
         logger.info('Инициализация MCP клиента...')
         self.mcp_client = MultiServerMCPClient(self.config.get_mcp_config())
-        self.tools = await self.mcp_client.get_tools()
 
-        if not self.tools:
+        orig_tools = await self.mcp_client.get_tools()
+        if not orig_tools:
             raise Exception('Нет доступных MCP инструментов')
 
-        logger.info(f'Загружено {len(self.tools)} инструментов:')
+        def _get_raw():
+            return getattr(self, '_last_user_input', None)
 
-        # Группируем инструменты по типам
+        self.tools = []
         filesystem_tools = []
         search_tools = []
 
-        for tool in self.tools:
-            tool_name = tool.name
-            if any(fs_keyword in tool_name.lower() for fs_keyword in
-                   ['read', 'write', 'file', 'directory', 'move', 'create']):
-                filesystem_tools.append(tool_name)
-            elif any(search_keyword in tool_name.lower() for search_keyword in
-                     ['search', 'brave', 'web']):
-                search_tools.append(tool_name)
+        for tool in orig_tools:
+            name = (tool.name or '').lower()
+            if any(k in name for k in ['search', 'brave', 'web']):
+                # оборачиваем ТОЛЬКО инструменты поиска
+                wrapped = wrap_search_tool(tool, _get_raw)
+                self.tools.append(wrapped)
+                search_tools.append(tool.name)
+            else:
+                # все остальные — без изменений
+                self.tools.append(tool)
+                if any(
+                    fs_keyword in name for fs_keyword
+                    in ['read', 'write', 'file', 'directory', 'move', 'create']
+                ):
+                    filesystem_tools.append(tool.name)
+
+        logger.info(f'Загружено {len(self.tools)} инструментов:')
 
         if filesystem_tools:
             logger.info(
