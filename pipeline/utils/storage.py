@@ -39,29 +39,37 @@ def save_search_results(
             title = (data.get('title') or '').strip()
             description = (data.get('description') or '').strip()
 
-            logger.debug(f'[{item}] URL="{url}", title="{title}", '
-                         f'description={"есть" if description else "пусто"}')
+            logger.info(f'[{item}] URL="{url}", title="{title}", '
+                        f'description={"есть" if description else "пусто"}')
 
             # 🔸 Если описания нет — пробуем выжать его Trafilatura
-            if not description and url:
+            logger.info(
+                f'[{item}] Пытаемся извлечь описание через Trafilatura '
+                f'для {url or "<no-url>"}'
+                )
+            new_description = fetch_desc_trafilatura(
+                url,
+                fallback_text=description,
+                max_chars=1000
+            )
+
+            if new_description and new_description != description:
+                snippet = new_description[:200].replace('\n', ' ')
                 logger.info(
-                    f'[{item}] Описание пустое, пробуем Trafilatura для {url}'
+                    f'[{item}] Trafilatura извлекла описание '
+                    f'({len(new_description)} символов): "{snippet}..."'
                     )
-                description = fetch_desc_trafilatura(
-                    url,
-                    fallback_text=description,
-                    max_chars=300
+            elif new_description:
+                logger.info(f'[{item}] Используем fallback из результата '
+                            f'поиска ({len(new_description)} символов)'
+                            )
+            else:
+                logger.warning(
+                    f'[{item}] Описание отсутствует '
+                    f'даже после Trafilatura и fallback'
                     )
-                if description:
-                    snippet = description[:200].replace('\n', ' ')
-                    logger.info(
-                        f'[{item}] Trafilatura извлекла описание '
-                        f'({len(description)} символов): "{snippet}..."'
-                        )
-                else:
-                    logger.warning(
-                        f'[{item}] Trafilatura не смогла извлечь описание'
-                        )
+
+            description = new_description
 
             items.append({
                 'query': query,
