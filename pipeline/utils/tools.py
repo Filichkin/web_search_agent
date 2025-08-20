@@ -115,7 +115,7 @@ def wrap_search_tool(
             pass
 
         result = await orig_tool.ainvoke(kwargs)
-        logger.info(result)
+        # logger.info(result)
 
         # сохраняем результаты
         try:
