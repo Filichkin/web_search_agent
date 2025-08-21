@@ -1,9 +1,12 @@
+import json
+from textwrap import shorten
 from typing import Any, Callable, Optional, Dict
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain.tools import StructuredTool
 
+from pipeline.utils.content import fetch_desc_trafilatura
 from pipeline.utils.logging import logger
 from pipeline.utils.storage import save_search_results
 
@@ -38,44 +41,38 @@ def wrap_search_tool(
         orig_tool,
         get_raw_user_input: Callable[[], Optional[str]],
         *,
-        max_calls_per_message: int = 2   # ← ограничение для одного сообщения
+        max_calls_per_message: int = 2
 ):
     """
-    StructuredTool-обёртка:
-    - логирует вход,
+    Обёртка поискового инструмента:
     - подменяет kwargs['query'] на сырое сообщение пользователя,
-    - защищает от повторов и бесконечной петли,
-    - сохраняет сырые результаты в JSON.
-    (Без вмешательства в count/limit/и т.п.)
+    - предотвращает зацикливание,
+    - обогащает результаты Trafilatura и возвращает Markdown-контекст,
+    - логирует и сохраняет JSON.
     """
 
-    # состояние «на текущее сообщение»
     called_queries: set[str] = set()
     call_count: int = 0
     last_seen_raw: Optional[str] = None
 
-    # схема аргументов (как у тебя было)
-    args_schema = getattr(orig_tool, 'args_schema', None)
-    if args_schema is None:
-        class _Args(BaseModel):
-            query: str = Field(description='Search query string')
+    class _Args(BaseModel):
+        query: str = Field(description='Search query string')
 
-            class Config:
-                extra = 'allow'
-        args_schema = _Args
+        class Config:
+            extra = 'allow'
 
     async def _acall(**kwargs: Dict[str, Any]) -> Any:
         nonlocal call_count, called_queries, last_seen_raw
 
         raw = get_raw_user_input()
 
-        # если пришёл новый пользовательский ввод — сбросить состояние
+        # сброс контекста при новом пользовательском сообщении
         if raw != last_seen_raw:
             called_queries = set()
             call_count = 0
             last_seen_raw = raw
 
-        # лог ДО правки
+        # лог до правки
         try:
             logger.info(
                 '🔎 [ПОИСК] До правки | tool=%s | input=%r',
@@ -85,26 +82,26 @@ def wrap_search_tool(
         except Exception:
             pass
 
-        # подменяем только query (остальное не трогаем)
+        # всегда подставляем полный исходный текст пользователя
         if raw:
             kwargs = {**kwargs, 'query': raw}
 
-        # анти-петля: дедуп + лимит
+        # анти-петля
         qnorm = (kwargs.get('query') or '').strip().lower()
         if qnorm in called_queries:
             return (
                 'Поиск уже выполнен по этому же запросу; '
-                'используй найденные ссылки/результаты для ответа.'
+                'используй найденные источники ниже.'
                 )
         if call_count >= max_calls_per_message:
             return (
                 'Достигнут лимит поисковых запросов для этого сообщения; '
-                'сформируй ответ по имеющимся результатам.'
+                'сформируй ответ по уже найденным источникам.'
                 )
         called_queries.add(qnorm)
         call_count += 1
 
-        # лог ПОСЛЕ правки
+        # лог после правки
         try:
             logger.info(
                 '🔎 [ПОИСК] После правки | tool=%s | input=%r',
@@ -114,23 +111,82 @@ def wrap_search_tool(
         except Exception:
             pass
 
+        # вызываем оригинальный MCP-инструмент
         result = await orig_tool.ainvoke(kwargs)
-        # logger.info(result)
 
-        # сохраняем результаты
+        # сохраняем (как есть, без модификаций)
         try:
-            query = kwargs.get('query', '')
-            save_search_results(query, result)
-            logger.info('Успешно сохранено')
+            saved = save_search_results(kwargs.get('query', ''), result)
+            logger.info('💾 Сохранено результатов: %s', saved)
         except Exception as e:
             logger.warning('Не удалось сохранить результаты поиска: %s', e)
 
-        return result
+        # --- ОБОГАЩЕНИЕ ДЛЯ КОНТЕКСТА МОДЕЛИ ---
+        enriched = []
+        if isinstance(result, list):
+            for item, element in enumerate(result, start=1):
+                if len(enriched) >= 5:
+                    break
+                try:
+                    data = (
+                        json.loads(element)
+                        if isinstance(element, str) else element
+                        )
+                except Exception as error:
+                    logger.warning(
+                        '[%s] Не удалось распарсить элемент: %s',
+                        item,
+                        error
+                        )
+                    continue
+
+                url = (data.get('url') or '').strip()
+                title = (data.get('title') or '').strip()
+                desc = (data.get('description') or '').strip()
+
+                logger.info('[%s] Trafilatura для %s', item, url or '<no-url>')
+                # всегда пытаемся вытащить текст;
+                # если пусто — берём исходный desc
+                summary = fetch_desc_trafilatura(
+                    url,
+                    fallback_text=desc,
+                    max_chars=1000
+                    )
+                # ужмём до пары коротких предложений
+                # (визуально 220–300 символов)
+                snippet = shorten(
+                    summary.replace('\n', ' ').strip(),
+                    width=280,
+                    placeholder='...'
+                    )
+
+                enriched.append({
+                    'url': url,
+                    'title': title or url,
+                    'snippet': snippet
+                })
+
+        # собираем удобоваримый Markdown, который увидит модель
+        if enriched:
+            lines = ['### Источники (обогащены, использовать для ответа):']
+            for it in enriched:
+                lines.append(
+                    f'- [{it["title"]}]({it["url"]}) — {it["snippet"]}'
+                    )
+            context_md = '\n'.join(lines)
+        else:
+            # если обогащение не удалось — вернём как есть
+            context_md = (
+                'Не удалось обогатить результаты; '
+                'используй исходные ссылки из поиска.'
+                )
+
+        return context_md
 
     return StructuredTool.from_function(
         coroutine=_acall,
         name=orig_tool.name,
         description=getattr(orig_tool, 'description', ''),
-        args_schema=args_schema,
-        return_direct=False,
+        args_schema=_Args,
+        return_direct=False,  # пусть модель видит контекст и сама пишет ответ
     )

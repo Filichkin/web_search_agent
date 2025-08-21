@@ -49,9 +49,11 @@ def fetch_desc_trafilatura(
         return extracted
 
     # fallback
-    fb = _clean_text(fallback_text)[:max_chars]
-    if fb:
-        logger.info(f'[Trafilatura] fallback использован ({len(fb)} симв.)')
+    fallback_text = _clean_text(fallback_text)[:max_chars]
+    if fallback_text:
+        logger.info(
+            f'[Trafilatura] fallback использован ({len(fallback_text)} симв.)'
+            )
     else:
         logger.warning('[Trafilatura] fallback пуст')
-    return fb
+    return fallback_text
