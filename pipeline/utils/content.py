@@ -17,7 +17,7 @@ def _clean_text(s: str) -> str:
 def fetch_desc_trafilatura(
         url: str,
         fallback_text: str = '',
-        max_chars: int = 300
+        max_chars: int = 1000
 ) -> str:
     """
     Пытается извлечь краткое описание страницы через Trafilatura.

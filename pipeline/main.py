@@ -60,6 +60,7 @@ class AgentConfig:
     use_memory: bool = True
     enable_web_search: bool = True
     search_count: int = 10
+    answer_max_tokens: int = 900
 
     # Упрощенные настройки моделей
     model_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
@@ -167,7 +168,10 @@ class ModelFactory:
             return ChatOllama(
                 model=model_config['model_name'],
                 base_url=model_config['base_url'],
-                temperature=model_config['temperature']
+                temperature=model_config['temperature'],
+                model_kwargs={
+                    'num_predict': getattr(config, 'answer_max_tokens', 900)
+                    }
             )
 
         elif provider in ['openrouter', 'openai']:
@@ -176,14 +180,16 @@ class ModelFactory:
                 model=model_config['model_name'],
                 api_key=api_key,
                 base_url=model_config.get('base_url'),
-                temperature=model_config['temperature']
+                temperature=model_config['temperature'],
+                max_tokens=getattr(config, 'answer_max_tokens', 900),
             )
         elif provider == 'deepseek':
             api_key = os.getenv(model_config['api_key_env'])
             return ChatDeepSeek(
                 model=model_config['model_name'],
                 api_key=api_key,
-                temperature=model_config['temperature']
+                temperature=model_config['temperature'],
+                max_tokens=getattr(config, 'answer_max_tokens', 900)
             )
         else:
             raise ValueError(f'Неизвестный провайдер: {provider}')
@@ -320,6 +326,10 @@ class FileSystemAgent:
             'без перефразирования и сокращений.'
             'После первого успешного веб-поиска переходи к ответу; '
             'не повторяй один и тот же поиск более одного раза.'
+            '\n\nФормат ответа: дай развёрнутый и '
+            'структурированный обзор (8–12 пунктов), '
+            'с конкретными примерами и краткими цитатами из источников. '
+            'В конце добавь список использованных ссылок.'
             )
 
         if self.config.enable_web_search:
@@ -370,7 +380,7 @@ class FileSystemAgent:
                 'configurable': {'thread_id': thread_id},
                 'raw_user_input': user_input,
                 'callbacks': [SearchLoggingCallback()],
-                'recursion_limit': 6
+                'recursion_limit': 8
                 }
             message_input = {'messages': [HumanMessage(content=user_input)]}
 

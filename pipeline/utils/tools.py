@@ -1,5 +1,4 @@
 import json
-from textwrap import shorten
 from typing import Any, Callable, Optional, Dict
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -150,29 +149,30 @@ def wrap_search_tool(
                 summary = fetch_desc_trafilatura(
                     url,
                     fallback_text=desc,
-                    max_chars=1000
+                    max_chars=2000
                     )
                 # ужмём до пары коротких предложений
                 # (визуально 220–300 символов)
-                snippet = shorten(
-                    summary.replace('\n', ' ').strip(),
-                    width=280,
-                    placeholder='...'
-                    )
+                snippet = summary.replace('\n', ' ').strip()
+                if len(snippet) > 2000:
+                    snippet = snippet[:1500] + '...'
 
                 enriched.append({
                     'url': url,
                     'title': title or url,
                     'snippet': snippet
                 })
+                # logger.info(f'ENRICHED: {enriched}')
 
         # собираем удобоваримый Markdown, который увидит модель
         if enriched:
-            lines = ['### Источники (обогащены, использовать для ответа):']
-            for it in enriched:
-                lines.append(
-                    f'- [{it["title"]}]({it["url"]}) — {it["snippet"]}'
-                    )
+            lines = [
+                '### Источники (обогащены Trafilatura — используй при ответе):'
+                ]
+            for source in enriched:
+                lines.append(f'- [{source["title"]}]({source["url"]})')
+                lines.append(f'  {source["snippet"]}')
+                lines.append('')
             context_md = '\n'.join(lines)
         else:
             # если обогащение не удалось — вернём как есть
@@ -180,7 +180,7 @@ def wrap_search_tool(
                 'Не удалось обогатить результаты; '
                 'используй исходные ссылки из поиска.'
                 )
-
+        # logger.info('🔗 [ПОИСК] Контекст для модели:\n%s', context_md)
         return context_md
 
     return StructuredTool.from_function(
