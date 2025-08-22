@@ -1,8 +1,8 @@
 import re
 import trafilatura
 
-from pipeline.utils.constants import TRANFILATURA_MAX_CHARS
-from pipeline.utils.logging import logger
+from app.utils.constants import TRANFILATURA_MAX_CHARS
+from app.utils.logging import logger
 
 
 _HTML_TAG_RE = re.compile(r'<[^>]+>')

@@ -5,8 +5,8 @@ import gradio as gr
 from dotenv import load_dotenv
 
 from config import settings
-from pipeline.main import FileSystemAgent, AgentConfig, ModelProvider
-from pipeline.utils.logging import logger
+from app.main import FileSystemAgent, AgentConfig, ModelProvider
+from app.utils.logging import logger
 
 
 _agent_holder: dict[str, FileSystemAgent | None] = {'agent': None}

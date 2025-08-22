@@ -5,13 +5,13 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from pipeline.utils.constants import (
+from app.utils.constants import (
     SNIPPET_MAX_CHARS,
     TRANFILATURA_MAX_CHARS,
 )
-from pipeline.utils.content import fetch_desc_trafilatura
-from pipeline.utils.logging import logger
-from pipeline.utils.storage import save_search_results
+from app.utils.content import fetch_desc_trafilatura
+from app.utils.logging import logger
+from app.utils.storage import save_search_results
 
 
 class SearchLoggingCallback(BaseCallbackHandler):

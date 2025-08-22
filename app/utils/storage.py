@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from pipeline.utils.logging import logger
+from app.utils.logging import logger
 
 
 def save_search_results(

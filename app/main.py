@@ -15,8 +15,8 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
 from config import settings
-from pipeline.utils.logging import logger
-from pipeline.utils.tools import SearchLoggingCallback, wrap_search_tool
+from app.utils.logging import logger
+from app.utils.tools import SearchLoggingCallback, wrap_search_tool
 
 
 # ===== ЕНУМЫ И КОНСТАНТЫ =====
