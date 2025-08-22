@@ -24,7 +24,7 @@ AI-агент для веб-поиска и анализа информации 
 
 ## 🖼 Превью
 
-![GEO Web Search Agent UI](agent_example.png)
+<img src="agent_example.png" alt="GEO Web Search Agent UI" width="600" height: auto>
 
 > Скриншот: пример работы агента через Gradio.
 
