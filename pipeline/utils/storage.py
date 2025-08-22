@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+from pipeline.utils.constants import MAX_ITEMS, TRANFILATURA_MAX_CHARS
 from pipeline.utils.content import fetch_desc_trafilatura
 from pipeline.utils.logging import logger
 
@@ -10,7 +11,7 @@ def save_search_results(
         query: str,
         results: Any,
         output_file='results.json',
-        max_items: int = 5
+        max_items: int = MAX_ITEMS
 ) -> int:
     items = []
     now = datetime.now().isoformat(timespec='seconds')
@@ -50,7 +51,7 @@ def save_search_results(
             new_description = fetch_desc_trafilatura(
                 url,
                 fallback_text=description,
-                max_chars=1000
+                max_chars=TRANFILATURA_MAX_CHARS
             )
 
             if new_description and new_description != description:

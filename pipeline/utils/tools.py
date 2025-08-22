@@ -5,6 +5,10 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain.tools import StructuredTool
 
+from pipeline.utils.constants import (
+    SNIPPET_MAX_CHARS,
+    TRANFILATURA_MAX_CHARS
+)
 from pipeline.utils.content import fetch_desc_trafilatura
 from pipeline.utils.logging import logger
 from pipeline.utils.storage import save_search_results
@@ -149,14 +153,14 @@ def wrap_search_tool(
                 summary = fetch_desc_trafilatura(
                     url,
                     fallback_text=desc,
-                    max_chars=2000
+                    max_chars=TRANFILATURA_MAX_CHARS
                     )
                 # ужмём до пары коротких предложений
                 # (визуально 220–300 символов)
-                snippet = summary.replace('\n', ' ').strip()
-                if len(snippet) > 2000:
-                    snippet = snippet[:1500] + '...'
-
+                snippet = (
+                    summary.replace('\n', ' ').strip()[:SNIPPET_MAX_CHARS]
+                    + '...'
+                    )
                 enriched.append({
                     'url': url,
                     'title': title or url,

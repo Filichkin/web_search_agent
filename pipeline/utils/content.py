@@ -1,6 +1,7 @@
 import re
 import trafilatura
 
+from pipeline.utils.constants import TRANFILATURA_MAX_CHARS
 from pipeline.utils.logging import logger
 
 
@@ -17,7 +18,7 @@ def _clean_text(s: str) -> str:
 def fetch_desc_trafilatura(
         url: str,
         fallback_text: str = '',
-        max_chars: int = 1000
+        max_chars: int = TRANFILATURA_MAX_CHARS
 ) -> str:
     """
     Пытается извлечь краткое описание страницы через Trafilatura.
