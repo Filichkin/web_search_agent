@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
+from config import settings
 from pipeline.utils.logging import logger
 from pipeline.utils.tools import SearchLoggingCallback, wrap_search_tool
 
@@ -59,31 +60,33 @@ class AgentConfig:
     model_provider: ModelProvider = ModelProvider.OLLAMA
     use_memory: bool = True
     enable_web_search: bool = True
-    search_count: int = 10
-    answer_max_tokens: int = 900
 
     # Упрощенные настройки моделей
     model_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
-        "ollama": {
-            "model_name": "qwen2.5:0.5b",
-            "base_url": "http://localhost:11434",
-            "temperature": 0.0
+        'ollama': {
+            'model_name': 'qwen2.5:0.5b',
+            'base_url': 'http://localhost:11434',
+            'temperature': settings.TEMPERATURE,
+            'answer_max_tokens': settings.ANSWER_MAX_TOKENS,
         },
-        "openrouter": {
-            "model_name": "moonshotai/kimi-k2:free",
-            "api_key_env": "OPENROUTER_API_KEY",
-            "base_url": "https://openrouter.ai/api/v1",
-            "temperature": 0.0
+        'openrouter': {
+            'model_name': 'moonshotai/kimi-k2:free',
+            'api_key_env': 'OPENROUTER_API_KEY',
+            'base_url': 'https://openrouter.ai/api/v1',
+            'temperature': settings.TEMPERATURE,
+            'answer_max_tokens': settings.ANSWER_MAX_TOKENS,
         },
-        "openai": {
-            "model_name": "gpt-4o-mini",
-            "api_key_env": "OPENAI_API_KEY",
-            "temperature": 0.0
+        'openai': {
+            'model_name': 'gpt-4o-mini',
+            'api_key_env': 'OPENAI_API_KEY',
+            'temperature': settings.TEMPERATURE,
+            'answer_max_tokens': settings.ANSWER_MAX_TOKENS,
         },
-        "deepseek": {
-            "model_name": "deepseek-chat",
-            "api_key_env": "DEEPSEEK_API_KEY",
-            "temperature": 0.0
+        'deepseek': {
+            'model_name': 'deepseek-chat',
+            'api_key_env': 'DEEPSEEK_API_KEY',
+            'temperature': settings.TEMPERATURE,
+            'answer_max_tokens': settings.ANSWER_MAX_TOKENS,
         }
     })
 
@@ -106,7 +109,7 @@ class AgentConfig:
                 )
 
         # Проверка API ключа для веб-поиска
-        if self.enable_web_search and not os.getenv('BRAVE_API_KEY'):
+        if self.enable_web_search and not settings.BRAVE_API_KEY:
             logger.warning(
                 'BRAVE_API_KEY не найден - веб-поиск будет отключен'
                 )
@@ -127,7 +130,7 @@ class AgentConfig:
         }
 
         # Добавляем веб-поиск если включен и есть API ключ
-        if self.enable_web_search and os.getenv('BRAVE_API_KEY'):
+        if self.enable_web_search and settings.BRAVE_API_KEY:
             mcp_config["brave-search"] = {
                 "command": "npx",
                 "args": [
@@ -139,7 +142,7 @@ class AgentConfig:
                     ],
                 "transport": "stdio",
                 "env": {
-                    "BRAVE_API_KEY": os.getenv("BRAVE_API_KEY"),
+                    "BRAVE_API_KEY": settings.BRAVE_API_KEY,
                     "BRAVE_MCP_LOG_LEVEL": "debug"
                 }
             }
@@ -175,7 +178,7 @@ class ModelFactory:
             )
 
         elif provider in ['openrouter', 'openai']:
-            api_key = os.getenv(model_config['api_key_env'])
+            api_key = settings.OPENAI_API_KEY
             return ChatOpenAI(
                 model=model_config['model_name'],
                 api_key=api_key,
@@ -425,7 +428,7 @@ class FileSystemAgent:
             'memory_enabled': self.config.use_memory,
             'web_search_enabled': self.config.enable_web_search,
             'tools_count': len(self.tools),
-            'brave_api_key_present': bool(os.getenv('BRAVE_API_KEY'))
+            'brave_api_key_present': bool(settings.BRAVE_API_KEY)
         }
 
 
@@ -507,12 +510,9 @@ async def main():
     try:
         # Создание конфигурации
         config = AgentConfig(
-            filesystem_path=os.getenv(
-                'FILESYSTEM_PATH',
-                '/Users/alexeyfilichkin/MainDev/web_search_agent'
-                ),
+            filesystem_path=settings.FILESYSTEM_PATH,
             model_provider=ModelProvider(
-                os.getenv('MODEL_PROVIDER', 'openai')
+                settings.MODEL_PROVIDER
                 ),
             enable_web_search=True  # Включаем веб-поиск
         )
