@@ -44,7 +44,7 @@ def wrap_search_tool(
         orig_tool,
         get_raw_user_input: Callable[[], Optional[str]],
         *,
-        max_calls_per_message: int = 2
+        max_calls_per_message: int = 1
 ):
     """
     Обёртка поискового инструмента:
@@ -118,11 +118,11 @@ def wrap_search_tool(
         result = await orig_tool.ainvoke(kwargs)
 
         # сохраняем (как есть, без модификаций)
-        try:
-            saved = save_search_results(kwargs.get('query', ''), result)
-            logger.info('💾 Сохранено результатов: %s', saved)
-        except Exception as e:
-            logger.warning('Не удалось сохранить результаты поиска: %s', e)
+        # try:
+        #     saved = save_search_results(kwargs.get('query', ''), result)
+        #     logger.info('💾 Сохранено результатов: %s', saved)
+        # except Exception as e:
+        #     logger.warning('Не удалось сохранить результаты поиска: %s', e)
 
         # --- ОБОГАЩЕНИЕ ДЛЯ КОНТЕКСТА МОДЕЛИ ---
         enriched = []
@@ -155,12 +155,14 @@ def wrap_search_tool(
                     fallback_text=desc,
                     max_chars=TRANFILATURA_MAX_CHARS
                     )
-                # ужмём до пары коротких предложений
-                # (визуально 220–300 символов)
-                snippet = (
-                    summary.replace('\n', ' ').strip()[:SNIPPET_MAX_CHARS]
-                    + '...'
-                    )
+                snippet = summary.replace('\n', ' ').strip()
+                low = snippet.lower()
+                if (
+                    'подтвердите, что запросы отправляли вы' in low
+                    or 'captcha' in low
+                ):
+                    snippet = (desc or '').replace('\n', ' ').strip()
+                snippet = snippet[:SNIPPET_MAX_CHARS] + '...'
                 enriched.append({
                     'url': url,
                     'title': title or url,
@@ -168,7 +170,19 @@ def wrap_search_tool(
                 })
                 # logger.info(f'ENRICHED: {enriched}')
 
-        # собираем удобоваримый Markdown, который увидит модель
+        # собираем Markdown, который увидит модель
+        # теперь сохраняем ТОЛЬКО enriched
+        try:
+            saved = save_search_results(
+                kwargs.get('query', ''),
+                enriched,
+                already_enriched=True
+                )
+            logger.info('💾 Сохранено enriched-результатов: %s', saved)
+        except Exception as e:
+            logger.warning('Не удалось сохранить enriched-результаты: %s', e)
+
+        # собираем markdown-контекст для модели
         if enriched:
             lines = [
                 '### Источники (обогащены Trafilatura — используй при ответе):'
@@ -179,12 +193,10 @@ def wrap_search_tool(
                 lines.append('')
             context_md = '\n'.join(lines)
         else:
-            # если обогащение не удалось — вернём как есть
             context_md = (
                 'Не удалось обогатить результаты; '
                 'используй исходные ссылки из поиска.'
                 )
-        # logger.info('🔗 [ПОИСК] Контекст для модели:\n%s', context_md)
         return context_md
 
     return StructuredTool.from_function(

@@ -182,6 +182,8 @@ class ModelFactory:
                 base_url=model_config.get('base_url'),
                 temperature=model_config['temperature'],
                 max_tokens=getattr(config, 'answer_max_tokens', 900),
+                timeout=60,
+                max_retries=6
             )
         elif provider == 'deepseek':
             api_key = os.getenv(model_config['api_key_env'])
@@ -383,14 +385,36 @@ class FileSystemAgent:
                 'recursion_limit': 8
                 }
             message_input = {'messages': [HumanMessage(content=user_input)]}
-
             response = await self.agent.ainvoke(message_input, config)
             return response['messages'][-1].content
 
         except Exception as e:
             error_msg = f'❌ Ошибка обработки: {e}'
             logger.error(error_msg)
-            return error_msg
+            try:
+                msgs = (
+                    response.get('messages', [])
+                    if 'response' in locals() else []
+                    )
+                tool_ctx = next(
+                    (
+                        m.content for m in reversed(msgs)
+                        if getattr(m, 'type', '') == 'ai'
+                        and 'Источники (обогащены' in m.content),
+                    None
+                )
+                if tool_ctx:
+                    return (
+                        tool_ctx +
+                        '\n\n_Автоматический фолбэк: '
+                        'генерация не удалась, показываю источники._'
+                        )
+            except Exception:
+                pass
+            return (
+                '❌ Не удалось сгенерировать финальный ответ (сетевой сбой). '
+                'Источники сохранены в results.json.'
+                )
 
     def get_status(self) -> Dict[str, Any]:
         """Информация о состоянии агента"""

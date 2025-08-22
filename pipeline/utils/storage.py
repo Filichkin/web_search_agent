@@ -1,109 +1,145 @@
+# pipeline/utils/storage.py
 import json
 from datetime import datetime
 from typing import Any
 
-from pipeline.utils.constants import MAX_ITEMS, TRANFILATURA_MAX_CHARS
-from pipeline.utils.content import fetch_desc_trafilatura
 from pipeline.utils.logging import logger
 
 
 def save_search_results(
-        query: str,
-        results: Any,
-        output_file='results.json',
-        max_items: int = MAX_ITEMS
+    query: str,
+    results: Any,
+    output_file: str = 'results.json',
+    max_items: int = 5,
+    already_enriched: bool = False
 ) -> int:
-    items = []
     now = datetime.now().isoformat(timespec='seconds')
 
-    logger.info(f'💾 Сохранение результатов поиска: query="{query}", '
-                f'макс. элементов={max_items}, файл="{output_file}"')
+    logger.info(
+        '💾 Сохранение результатов поиска: '
+        'query=%r, макс. элементов=%s, файл=%r, enriched=%s',
+        query, max_items, output_file, already_enriched
+    )
 
-    if isinstance(results, list):
-        logger.info(
-            f'Получено {len(results)} результатов, '
-            f'берём первые {min(len(results), max_items)}'
-            )
-
-        for item, element in enumerate(results[:max_items], start=1):
-            try:
-                data = json.loads(element) if isinstance(
-                    element, str) else element
-            except Exception as e:
-                logger.warning(
-                    f'[{item}] Не удалось распарсить элемент: {element}, '
-                    f'ошибка: {e}'
-                    )
-                continue
-
-            url = (data.get('url') or '').strip()
-            title = (data.get('title') or '').strip()
-            description = (data.get('description') or '').strip()
-
-            logger.info(f'[{item}] URL="{url}", title="{title}", '
-                        f'description={"есть" if description else "пусто"}')
-
-            # 🔸 Если описания нет — пробуем выжать его Trafilatura
-            logger.info(
-                f'[{item}] Пытаемся извлечь описание через Trafilatura '
-                f'для {url or "<no-url>"}'
-                )
-            new_description = fetch_desc_trafilatura(
-                url,
-                fallback_text=description,
-                max_chars=TRANFILATURA_MAX_CHARS
-            )
-
-            if new_description and new_description != description:
-                snippet = new_description[:200].replace('\n', ' ')
-                logger.info(
-                    f'[{item}] Trafilatura извлекла описание '
-                    f'({len(new_description)} символов): "{snippet}..."'
-                    )
-            elif new_description:
-                logger.info(f'[{item}] Используем fallback из результата '
-                            f'поиска ({len(new_description)} символов)'
-                            )
-            else:
-                logger.warning(
-                    f'[{item}] Описание отсутствует '
-                    f'даже после Trafilatura и fallback'
-                    )
-
-            description = new_description
-
-            items.append({
-                'query': query,
-                'date': now,
-                'title': title,
-                'description': description,
-                'url': url
-            })
-
-    # читаем уже сохранённое
+    # читаем существующие данные
     try:
         with open(output_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if not isinstance(data, list):
                 logger.warning(
-                    f'Файл {output_file} не является списком, перезаписываем'
+                    'Файл %s не является списком, перезаписываем',
+                    output_file
                     )
                 data = []
     except FileNotFoundError:
-        logger.info(f'Файл {output_file} не найден, создаём новый')
+        logger.info('Файл %s не найден, создаём новый', output_file)
         data = []
     except json.JSONDecodeError:
         logger.warning(
-            f'Файл {output_file} повреждён или пустой, перезаписываем'
+            'Файл %s повреждён или пустой, перезаписываем',
+            output_file
             )
         data = []
 
-    data.extend(items)
+    # множество уже существующих ключей для дедупа
+    # ключ по URL (нормализуем пробелы/регистр)
+    existing_urls = {
+        (
+            (rec.get('url') or '').strip().lower()
+            for rec in data if isinstance(rec, dict)
+            )
+        }
+
+    added = 0
+
+    if already_enriched:
+        # ожидаем список словарей {'url','title','snippet'}
+        if isinstance(results, list):
+            logger.info(
+                'Получено %s enriched-элементов, берём первые %s',
+                len(results),
+                min(len(results),
+                    max_items)
+                    )
+            for index, element in enumerate(results[:max_items], start=1):
+                url = (element.get('url') or '').strip()
+                url_key = url.lower()
+                if not url or url_key in existing_urls:
+                    logger.info(
+                        '[%s] Пропуск (дубликат или пустой URL): %r',
+                        index,
+                        url
+                        )
+                    continue
+                title = (element.get('title') or '').strip() or url
+                description = (element.get('snippet') or '').strip()
+                data.append({
+                    'query': query,
+                    'date': now,
+                    'title': title,
+                    'description': description,
+                    'url': url
+                })
+                existing_urls.add(url_key)
+                added += 1
+        else:
+            logger.warning(
+                'Ожидался список enriched-элементов, получено: %r',
+                type(results)
+                )
+    else:
+        # сырой список (строки JSON или словари)
+        if isinstance(results, list):
+            logger.info(
+                'Получено %s результатов, берём первые %s',
+                len(results),
+                min(len(results), max_items)
+                )
+            for index, element in enumerate(results[:max_items], start=1):
+                try:
+                    data_el = (
+                        json.loads(element) if isinstance(element, str)
+                        else element
+                        )
+                except Exception as error:
+                    logger.warning(
+                        '[%s] Не удалось распарсить элемент: %s',
+                        index,
+                        error
+                        )
+                    continue
+                url = (data_el.get('url') or '').strip()
+                url_key = url.lower()
+                if not url or url_key in existing_urls:
+                    logger.info(
+                        '[%s] Пропуск (дубликат или пустой URL): %r',
+                        index,
+                        url
+                        )
+                    continue
+                title = (data_el.get('title') or '').strip() or url
+                description = (data_el.get('description') or '').strip()
+                data.append({
+                    'query': query,
+                    'date': now,
+                    'title': title,
+                    'description': description,
+                    'url': url
+                })
+                existing_urls.add(url_key)
+                added += 1
+        else:
+            logger.warning(
+                'Ожидался список сырых элементов, получено: %r',
+                type(results)
+                )
 
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    logger.info(f'Успешно сохранено {len(items)} новых результатов. '
-                f'Всего в файле теперь {len(data)} записей.')
-
-    return len(items)
+    logger.info(
+        'Успешно добавлено %s новых записей (после дедупа). Всего: %s',
+        added,
+        len(data)
+        )
+    return added
