@@ -2,8 +2,8 @@ import json
 from typing import Any, Callable, Optional, Dict
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain.tools import StructuredTool
+from pydantic import BaseModel, Field
 
 from pipeline.utils.constants import (
     SNIPPET_MAX_CHARS,
