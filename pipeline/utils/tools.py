@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from pipeline.utils.constants import (
     SNIPPET_MAX_CHARS,
-    TRANFILATURA_MAX_CHARS
+    TRANFILATURA_MAX_CHARS,
 )
 from pipeline.utils.content import fetch_desc_trafilatura
 from pipeline.utils.logging import logger
@@ -15,44 +15,46 @@ from pipeline.utils.storage import save_search_results
 
 
 class SearchLoggingCallback(BaseCallbackHandler):
-    """
+    '''
     Логирует входные данные инструментов поиска (например, brave-search).
-    """
+    '''
+
     def on_tool_start(self, serialized, input_str, **kwargs):
         # serialized содержит метаданные инструмента (name/description и пр.)
         tool_name = (serialized or {}).get('name', '').lower()
 
         # input_str в LC 0.2 бывает и dict, и str — поддержим оба варианта
-        query_text = None
         if isinstance(input_str, dict):
-            # У server-brave-search поле обычно называется 'query'
+            # у server-brave-search поле обычно называется 'query'
             query_text = input_str.get('query')
             if query_text is None:
-                # иногда модель может слать просто "input"
+                # иногда модель может слать просто 'input'
                 query_text = input_str.get('input')
         else:
             query_text = str(input_str)
 
-        # Логируем всё, что связано с поиском
-        if any(option in tool_name for option in ['search', 'brave', 'web']):
+        # логируем всё, что связано с поиском
+        if any(opt in tool_name for opt in ['search', 'brave', 'web']):
             logger.info(
-                '🔎 [ПОИСК] Инструмент: %s | Запрос: %r', tool_name, query_text
-                )
+                '🔎 [ПОИСК] Инструмент: {} | Запрос: {!r}',
+                tool_name,
+                query_text,
+            )
 
 
 def wrap_search_tool(
-        orig_tool,
-        get_raw_user_input: Callable[[], Optional[str]],
-        *,
-        max_calls_per_message: int = 1
+    orig_tool,
+    get_raw_user_input: Callable[[], Optional[str]],
+    *,
+    max_calls_per_message: int = 1,
 ):
-    """
+    '''
     Обёртка поискового инструмента:
     - подменяет kwargs['query'] на сырое сообщение пользователя,
     - предотвращает зацикливание,
     - обогащает результаты Trafilatura и возвращает Markdown-контекст,
     - логирует и сохраняет JSON.
-    """
+    '''
 
     called_queries: set[str] = set()
     call_count: int = 0
@@ -61,8 +63,8 @@ def wrap_search_tool(
     class _Args(BaseModel):
         query: str = Field(description='Search query string')
 
-        class Config:
-            extra = 'allow'
+        # pydantic v2
+        model_config = {'extra': 'allow'}
 
     async def _acall(**kwargs: Dict[str, Any]) -> Any:
         nonlocal call_count, called_queries, last_seen_raw
@@ -78,10 +80,10 @@ def wrap_search_tool(
         # лог до правки
         try:
             logger.info(
-                '🔎 [ПОИСК] До правки | tool=%s | input=%r',
+                '🔎 [ПОИСК] До правки | tool={} | input={!r}',
                 orig_tool.name,
-                kwargs
-                )
+                kwargs,
+            )
         except Exception:
             pass
 
@@ -95,34 +97,27 @@ def wrap_search_tool(
             return (
                 'Поиск уже выполнен по этому же запросу; '
                 'используй найденные источники ниже.'
-                )
+            )
         if call_count >= max_calls_per_message:
             return (
                 'Достигнут лимит поисковых запросов для этого сообщения; '
                 'сформируй ответ по уже найденным источникам.'
-                )
+            )
         called_queries.add(qnorm)
         call_count += 1
 
         # лог после правки
         try:
             logger.info(
-                '🔎 [ПОИСК] После правки | tool=%s | input=%r',
+                '🔎 [ПОИСК] После правки | tool={} | input={!r}',
                 orig_tool.name,
-                kwargs
-                )
+                kwargs,
+            )
         except Exception:
             pass
 
         # вызываем оригинальный MCP-инструмент
         result = await orig_tool.ainvoke(kwargs)
-
-        # сохраняем (как есть, без модификаций)
-        # try:
-        #     saved = save_search_results(kwargs.get('query', ''), result)
-        #     logger.info('💾 Сохранено результатов: %s', saved)
-        # except Exception as e:
-        #     logger.warning('Не удалось сохранить результаты поиска: %s', e)
 
         # --- ОБОГАЩЕНИЕ ДЛЯ КОНТЕКСТА МОДЕЛИ ---
         enriched = []
@@ -133,28 +128,31 @@ def wrap_search_tool(
                 try:
                     data = (
                         json.loads(element)
-                        if isinstance(element, str) else element
-                        )
+                        if isinstance(element, str)
+                        else element
+                    )
                 except Exception as error:
                     logger.warning(
-                        '[%s] Не удалось распарсить элемент: %s',
+                        '[{}] Не удалось распарсить элемент: {}',
                         item,
-                        error
-                        )
+                        error,
+                    )
                     continue
 
                 url = (data.get('url') or '').strip()
                 title = (data.get('title') or '').strip()
                 desc = (data.get('description') or '').strip()
 
-                logger.info('[%s] Trafilatura для %s', item, url or '<no-url>')
+                logger.info('[{}] Trafilatura для {}', item, url or '<no-url>')
+
                 # всегда пытаемся вытащить текст;
                 # если пусто — берём исходный desc
                 summary = fetch_desc_trafilatura(
                     url,
                     fallback_text=desc,
-                    max_chars=TRANFILATURA_MAX_CHARS
-                    )
+                    max_chars=TRANFILATURA_MAX_CHARS,
+                )
+
                 snippet = summary.replace('\n', ' ').strip()
                 low = snippet.lower()
                 if (
@@ -163,30 +161,34 @@ def wrap_search_tool(
                 ):
                     snippet = (desc or '').replace('\n', ' ').strip()
                 snippet = snippet[:SNIPPET_MAX_CHARS] + '...'
-                enriched.append({
-                    'url': url,
-                    'title': title or url,
-                    'snippet': snippet
-                })
-                # logger.info(f'ENRICHED: {enriched}')
 
-        # собираем Markdown, который увидит модель
-        # теперь сохраняем ТОЛЬКО enriched
+                enriched.append(
+                    {
+                        'url': url,
+                        'title': title or url,
+                        'snippet': snippet,
+                    }
+                )
+
+        # сохраняем ТОЛЬКО enriched в JSON
         try:
             saved = save_search_results(
                 kwargs.get('query', ''),
                 enriched,
-                already_enriched=True
-                )
-            logger.info('💾 Сохранено enriched-результатов: %s', saved)
+                already_enriched=True,
+            )
+            logger.info('💾 Сохранено enriched-результатов: {}', saved)
         except Exception as e:
-            logger.warning('Не удалось сохранить enriched-результаты: %s', e)
+            logger.warning(
+                'Не удалось сохранить enriched-результаты: {}',
+                e,
+            )
 
         # собираем markdown-контекст для модели
         if enriched:
             lines = [
                 '### Источники (обогащены Trafilatura — используй при ответе):'
-                ]
+            ]
             for source in enriched:
                 lines.append(f'- [{source["title"]}]({source["url"]})')
                 lines.append(f'  {source["snippet"]}')
@@ -196,7 +198,8 @@ def wrap_search_tool(
             context_md = (
                 'Не удалось обогатить результаты; '
                 'используй исходные ссылки из поиска.'
-                )
+            )
+
         return context_md
 
     return StructuredTool.from_function(

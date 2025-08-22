@@ -1,4 +1,3 @@
-# pipeline/utils/storage.py
 import json
 from datetime import datetime
 from typing import Any
@@ -16,8 +15,8 @@ def save_search_results(
     now = datetime.now().isoformat(timespec='seconds')
 
     logger.info(
-        '💾 Сохранение результатов поиска: '
-        'query=%r, макс. элементов=%s, файл=%r, enriched=%s',
+        '💾 Сохранение результатов поиска: query={!r}, '
+        'макс. элементов={}, файл={!r}, enriched={}',
         query, max_items, output_file, already_enriched
     )
 
@@ -27,46 +26,39 @@ def save_search_results(
             data = json.load(f)
             if not isinstance(data, list):
                 logger.warning(
-                    'Файл %s не является списком, перезаписываем',
+                    'Файл {} не является списком, перезаписываем',
                     output_file
                     )
                 data = []
     except FileNotFoundError:
-        logger.info('Файл %s не найден, создаём новый', output_file)
+        logger.info('Файл {} не найден, создаём новый', output_file)
         data = []
     except json.JSONDecodeError:
         logger.warning(
-            'Файл %s повреждён или пустой, перезаписываем',
+            'Файл {} повреждён или пустой, перезаписываем',
             output_file
             )
         data = []
 
     # множество уже существующих ключей для дедупа
-    # ключ по URL (нормализуем пробелы/регистр)
     existing_urls = {
-        (
-            (rec.get('url') or '').strip().lower()
-            for rec in data if isinstance(rec, dict)
-            )
-        }
+        (rec.get('url') or '').strip().lower()
+        for rec in data if isinstance(rec, dict)
+    }
 
     added = 0
 
     if already_enriched:
         # ожидаем список словарей {'url','title','snippet'}
         if isinstance(results, list):
-            logger.info(
-                'Получено %s enriched-элементов, берём первые %s',
-                len(results),
-                min(len(results),
-                    max_items)
-                    )
+            logger.info('Получено {} enriched-элементов, берём первые {}',
+                        len(results), min(len(results), max_items))
             for index, element in enumerate(results[:max_items], start=1):
                 url = (element.get('url') or '').strip()
                 url_key = url.lower()
                 if not url or url_key in existing_urls:
                     logger.info(
-                        '[%s] Пропуск (дубликат или пустой URL): %r',
+                        '[{}] Пропуск (дубликат или пустой URL): {!r}',
                         index,
                         url
                         )
@@ -84,17 +76,14 @@ def save_search_results(
                 added += 1
         else:
             logger.warning(
-                'Ожидался список enriched-элементов, получено: %r',
+                'Ожидался список enriched-элементов, получено: {!r}',
                 type(results)
                 )
     else:
         # сырой список (строки JSON или словари)
         if isinstance(results, list):
-            logger.info(
-                'Получено %s результатов, берём первые %s',
-                len(results),
-                min(len(results), max_items)
-                )
+            logger.info('Получено {} результатов, берём первые {}',
+                        len(results), min(len(results), max_items))
             for index, element in enumerate(results[:max_items], start=1):
                 try:
                     data_el = (
@@ -103,7 +92,7 @@ def save_search_results(
                         )
                 except Exception as error:
                     logger.warning(
-                        '[%s] Не удалось распарсить элемент: %s',
+                        '[{}] Не удалось распарсить элемент: {}',
                         index,
                         error
                         )
@@ -112,7 +101,7 @@ def save_search_results(
                 url_key = url.lower()
                 if not url or url_key in existing_urls:
                     logger.info(
-                        '[%s] Пропуск (дубликат или пустой URL): %r',
+                        '[{}] Пропуск (дубликат или пустой URL): {!r}',
                         index,
                         url
                         )
@@ -130,7 +119,7 @@ def save_search_results(
                 added += 1
         else:
             logger.warning(
-                'Ожидался список сырых элементов, получено: %r',
+                'Ожидался список сырых элементов, получено: {!r}',
                 type(results)
                 )
 
@@ -138,7 +127,7 @@ def save_search_results(
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     logger.info(
-        'Успешно добавлено %s новых записей (после дедупа). Всего: %s',
+        'Успешно добавлено {} новых записей (после дедупа). Всего: {}',
         added,
         len(data)
         )
