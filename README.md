@@ -30,9 +30,9 @@ AI-агент для веб-поиска и анализа информации 
 
 ---
 
-## 🗂️ Схема агентаг
+## 🗂️ Схема агента
 
-<img src="web_search.png" alt="Web Search Agent UI" width="600" height: auto>
+<img src="web_search.png" alt="Web Search Agent UI" width="200" height: auto>
 
 ---
 
